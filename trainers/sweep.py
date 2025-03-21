@@ -45,9 +45,11 @@ class Trainer(AbstractTrainer):
         self.exp_log_dir = os.path.join(self.home_path, self.save_dir)
         os.makedirs(self.exp_log_dir, exist_ok=True)
 
+
     def sweep(self):
         # sweep configurations
         sweep_runs_count = self.num_sweeps
+        print(f"Running {sweep_runs_count} sweeps")
         sweep_config = {
             'method': self.hp_search_strategy,
             'metric': {'name': self.metric_to_minimize, 'goal': 'minimize'},
@@ -56,12 +58,15 @@ class Trainer(AbstractTrainer):
         }
         sweep_id = wandb.sweep(sweep_config, project=self.sweep_project_wandb, entity=self.wandb_entity)
 
+        #TODO sweep_runs_coun is ignored
         wandb.agent(sweep_id, self.train, count=sweep_runs_count)
+
 
     def train(self):
         run = wandb.init(config=self.hparams)
-        self.hparams= wandb.config
-        
+        self.hparams = wandb.config
+        print(f"Running with config: {wandb.config}")
+
         # create tables for results and risks
         columns = ["scenario", "run", "acc", "f1_score", "auroc"]
         table_results = wandb.Table(columns=columns, allow_mixed_types=True)
@@ -69,31 +74,31 @@ class Trainer(AbstractTrainer):
         table_risks = wandb.Table(columns=columns, allow_mixed_types=True)
 
         for src_id, trg_id in self.dataset_configs.scenarios:
-            for run_id in range(self.num_runs):
-                # set random seed and create logger
-                fix_randomness(run_id)
-                self.logger, self.scenario_log_dir = starting_logs( self.dataset, self.da_method, self.exp_log_dir, src_id, trg_id, run_id  )
+                for run_id in range(self.num_runs):
+                    # set random seed and create logger
+                    fix_randomness(run_id)
+                    self.logger, self.scenario_log_dir = starting_logs(self.dataset, self.da_method, self.exp_log_dir, src_id, trg_id, run_id)
 
-                # average meters
-                self.loss_avg_meters = collections.defaultdict(lambda: AverageMeter())
+                    # average meters
+                    self.loss_avg_meters = collections.defaultdict(lambda: AverageMeter())
 
-                # load data and train model
-                self.load_data(src_id, trg_id)
+                    # load data and train model
+                    self.load_data(src_id, trg_id)
 
-                # initiate the domain adaptation algorithm
-                self.initialize_algorithm()
+                    # initiate the domain adaptation algorithm
+                    self.initialize_algorithm()
 
-                # Train the domain adaptation algorithm
-                self.last_model, self.best_model = self.algorithm.update(self.src_train_dl, self.trg_train_dl, self.loss_avg_meters, self.logger)
+                    # Train the domain adaptation algorithm
+                    self.last_model, self.best_model = self.algorithm.update(self.src_train_dl, self.trg_train_dl, self.loss_avg_meters, self.logger)
 
-                # calculate metrics and risks
-                metrics = self.calculate_metrics()
-                risks = self.calculate_risks()
+                    # calculate metrics and risks
+                    metrics = self.calculate_metrics()
+                    risks = self.calculate_risks()
 
-                # append results to tables
-                scenario = f"{src_id}_to_{trg_id}"
-                table_results.add_data(scenario, run_id, *metrics)
-                table_risks.add_data(scenario, run_id, *risks)
+                    # append results to tables
+                    scenario = f"{src_id}_to_{trg_id}"
+                    table_results.add_data(scenario, run_id, *metrics)
+                    table_risks.add_data(scenario, run_id, *risks)
 
         # calculate overall metrics and risks
         total_results, summary_metrics = self.calculate_avg_std_wandb_table(table_results)
@@ -101,6 +106,10 @@ class Trainer(AbstractTrainer):
 
         # log results to WandB
         self.wandb_logging(total_results, total_risks, summary_metrics, summary_risks)
+
+        # update hparams with the best results
+        best_hparams = {key: wandb.config[key] for key in wandb.config.keys()}
+        self.hparams = best_hparams
 
         # finish the run
         run.finish()

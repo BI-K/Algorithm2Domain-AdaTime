@@ -82,7 +82,7 @@ To train a model:
 
 ```
 python main.py  --phase train  \
-                --experiment_description exp1  \
+                --exp_name exp1  \
                 --da_method DANN \
                 --dataset HHAR \
                 --backbone CNN \
@@ -102,8 +102,7 @@ python main.py  --phase test  \
 Sweeps here are deployed on [Wandb](https://wandb.ai/), which makes it easier for visualization, following the training progress, organizing sweeps, and collecting results.
 
 ```
-python main_sweep.py  --experiment_description exp1_sweep  \
-                --run_description sweep_over_lr \
+python main_sweep.py --exp_name sweep_1
                 --da_method DANN \
                 --dataset HHAR \
                 --backbone CNN \
