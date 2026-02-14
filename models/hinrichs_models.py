@@ -63,23 +63,24 @@ class GRUHinrichs(nn.Module):
         # a linear output layer
         self.output_layer = nn.Linear(
             in_features=self.hidden_size,
-            out_features=self.n_output_ts * self.horizon
+            out_features=configs.features_len * configs.final_out_channels
         )
 
     def forward(self, x, padding_masks=None):   # noqa. Accept parameter padding masks for compatibility
 
+        # shape of x: (batch_size, seq_len, n_input_ts) => (batch_size, n_input_ts, seq_len)
+        x = x.permute(0, 2, 1)
         # Initializing hidden state for first input with zeros
         h0 = zeros(self.num_layers, x.size(0), self.hidden_size).requires_grad_().to(x.device)
 
-        # shape of x: (batch_size, seq_len, n_input_ts)
+        # shape of x: (batch_size, n_input_ts, seq_len)
         # shape of gru_out: (batch_size, seq_len, hidden_size)
         gru_out, _ = self.gru(x, h0.detach())
 
-        # shape of output: (batch_size, seq_len, horizon * n_output_ts)
-        output = self.output_layer(gru_out)
+        last_step = gru_out[:, -1, :]  # shape of last_step: (batch_size, hidden_size)
 
-        # re-shape to shape (batch_size, seq_len, horizon, n_output_ts)
-        output = output.reshape(output.size(0), output.size(1), self.horizon, self.n_output_ts)
+        # shape of output: (batch_size, seq_len, horizon * n_output_ts)
+        output = self.output_layer(last_step)
 
         return output
 
